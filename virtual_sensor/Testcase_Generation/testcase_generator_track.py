@@ -74,17 +74,19 @@ class car:
     def detect(self, cones_in_global_frame):
         rotation_angle = self.theta - np.pi/2;
         rotation_matrx = np.array([[np.cos(rotation_angle), np.sin(rotation_angle)],[-np.sin(rotation_angle), np.cos(rotation_angle)]]);
-        cones_in_car_frame_no_rotation = cones_in_global_frame - np.array([[self.pos_x],[self.pos_y]]);
+        cones_in_car_frame_no_rotation = cones_in_global_frame[0:2] - np.array([[self.pos_x],[self.pos_y]]);
         cones_in_car_frame = np.matmul(rotation_matrx, cones_in_car_frame_no_rotation)
         measured_cones_x = [];
         measured_cones_y = [];
+        measured_cone_type = [];
         for i in range(0,cones_in_car_frame[0].size,1):
             if (cones_in_car_frame[1][i] > 0) and (math.sqrt(cones_in_car_frame[0][i] ** 2 + cones_in_car_frame[1][i] ** 2) < self.sensing_range):
                 measured_cones_x.append(cones_in_car_frame[0][i]);
-                measured_cones_y.append(cones_in_car_frame[1][i])
-        self.recorded_data.append([self.t, measured_cones_x, measured_cones_y, self.return_position()[0], self.return_position()[1], self.return_position()[2]])
+                measured_cones_y.append(cones_in_car_frame[1][i]);
+                measured_cone_type.append(cones_in_global_frame[2][i]);
+        self.recorded_data.append([self.t, measured_cones_x, measured_cones_y, self.return_position()[0], self.return_position()[1], self.return_position()[2], measured_cone_type])
 
-        cone_in_car_frame_filtered = np.array([measured_cones_x, measured_cones_y])
+        cone_in_car_frame_filtered = np.array([measured_cones_x, measured_cones_y, measured_cone_type])
         return cone_in_car_frame_filtered
 
     def return_recorded_data(self):
@@ -105,14 +107,20 @@ def cone_track_generation(type_string, radius, width, number_of_cones):
         x_list_r = (radius + width) * np.cos(cone_array) - (radius + width) + width / 2;
         y_list_r = (radius + width) * np.sin(cone_array);
     else:
-        x_list_l = - (radius * np.cos(cone_array) - radius - width / 2);
-        y_list_l = radius * np.sin(cone_array);
-        x_list_r = - ((radius + width) * np.cos(cone_array) - (radius + width) + width / 2);
-        y_list_r = (radius + width) * np.sin(cone_array);
+        x_list_r = - (radius * np.cos(cone_array) - radius - width / 2);
+        y_list_r = radius * np.sin(cone_array);
+        x_list_l = - ((radius + width) * np.cos(cone_array) - (radius + width) + width / 2);
+        y_list_l = (radius + width) * np.sin(cone_array);
     x_list = np.concatenate((x_list_l, x_list_r));
     y_list = np.concatenate((y_list_l, y_list_r));
+
+    # Generate type
+    type_l = np.full((1, len(x_list_l)), 0);
+    type_r = np.full((1, len(x_list_r)), 2);
+    type_list = np.concatenate((type_l, type_r), axis = 1)[0];
+    #print(type_list);
     cone_list = np.array([x_list,y_list]);
-    return cone_list, x_list, y_list;
+    return cone_list, x_list, y_list, type_list;
 
 def time_lapsing(graph_arrow, point_detected_cones, car, time, animation_scale, cones_in_global):
     for i in range(0, time * 100, 1):
@@ -135,6 +143,20 @@ def time_lapsing(graph_arrow, point_detected_cones, car, time, animation_scale, 
 
 def DCM(theta):
     return np.array([[np.cos(theta), np.sin(theta)],[-np.sin(theta), np.cos(theta)]]);
+
+def extract_cone_x_y_with_type(cone_list):
+    cone_list_l_x = [];
+    cone_list_l_y = [];
+    cone_list_r_x = [];
+    cone_list_r_y = [];
+    for index in range(0, len(cone_list[0])):
+        if cone_list[2][index] == 0:
+            cone_list_l_x.append(cone_list[0][index]);
+            cone_list_l_y.append(cone_list[1][index]);
+        elif cone_list[2][index] == 2:
+            cone_list_r_x.append(cone_list[0][index]);
+            cone_list_r_y.append(cone_list[1][index]);
+    return cone_list_l_x, cone_list_l_y, cone_list_r_x, cone_list_r_y;
 #
 # Main code below:
 #
@@ -143,27 +165,28 @@ def DCM(theta):
 file_name = "test-data-track.txt"
 generation_type = "right" #options: left, right
 test_data_output_string = ""
-radius = 10;
-width = 3;
+radius = 20;
+width = 5;
 number_of_cones  = 25;
 #### Change this end
 
 # Clearing a file
 decimal_place = 4;
 
-head_for_cone_list = "List of cones" + "\n" + "x, y\n"
-head_for_sensor_data = "List of real time data" + "\n" + "t, x, y, theta, (distance(unit), theta(rad)) lists\n"
+#head_for_cone_list = "List of cones" + "\n" + "x, y\n"
+#head_for_sensor_data = "List of real time data" + "\n" + "t, x, y, theta, (distance(unit), theta(rad)) lists\n"
 
 # Initialize world and car 
 CAR = car(0,0,np.pi/2,1,np.pi/180,25);  #It is setted such that for each second, the rotation is one degree, and the translation is one unit
-cone_list, real_cone_x, real_cone_y = cone_track_generation(generation_type, radius, width, number_of_cones);
-cone_list = np.array([real_cone_x, real_cone_y])
+cone_list, real_cone_x, real_cone_y, type_list = cone_track_generation(generation_type, radius, width, number_of_cones);
+cone_list = np.array([real_cone_x, real_cone_y, type_list])
+print(cone_list)
 
 # Write existing cone into the file
-test_data_output_string = test_data_output_string + head_for_cone_list
-for index in range(0,len(real_cone_x),1):
-    append_string = str(round(real_cone_x[index],decimal_place)) + "," + str(round(real_cone_y[index],decimal_place)) + "\n";
-    test_data_output_string = test_data_output_string + append_string
+#test_data_output_string = test_data_output_string + head_for_cone_list
+#for index in range(0,len(real_cone_x),1):
+#    append_string = str(round(real_cone_x[index],decimal_place)) + "," + str(round(real_cone_y[index],decimal_place)) + ',' + str(type_list[index]) + "\n";
+#    test_data_output_string = test_data_output_string + append_string
 
 animation_scale = 1;     #animation scale: the animation speed is animation_scale x real time
 # Define landmarks
@@ -188,7 +211,11 @@ ax2.set_xlabel('sideway direction (unit)')
 ax2.set_ylabel('frontal direction (unit)')
 
 cart_symbol = ax.arrow(0, 0, 1, 0, head_width=1, head_length=1, fc='k', ec='k')
-ax.scatter(cone_list[0], cone_list[1], marker="x")
+
+left_x, left_y, right_x, right_y = extract_cone_x_y_with_type(cone_list)
+
+ax.scatter(left_x, left_y, marker="x")
+ax.scatter(right_x, right_y, marker="o")
 initial_detected_cone = CAR.detect(cone_list);
 point_detected_cones = ax2.plot(initial_detected_cone[0], initial_detected_cone[1], marker="X", linestyle = 'None')
 
@@ -206,20 +233,20 @@ time_lapsing(cart_symbol, point_detected_cones, CAR, 10, animation_scale, cone_l
 ##
 
 # Record all sensor data in format
-test_data_output_string = test_data_output_string + head_for_sensor_data
+#test_data_output_string = test_data_output_string + head_for_sensor_data
 
 sensor_data = CAR.return_recorded_data();
 for index in range(0, len(sensor_data), 1):
     append_string = str(round(sensor_data[index][0], decimal_place)) +  ","  + str(round(sensor_data[index][3], decimal_place)) +  ","  + str(round(sensor_data[index][4], decimal_place)) + "," + str(round(sensor_data[index][5], decimal_place)) + ","  
     for sensor_index in range(0, len(sensor_data[index][1]), 1):
-        append_string = append_string + "(" + str(round(sensor_data[index][1][sensor_index], decimal_place)) + "," + str(round(sensor_data[index][2][sensor_index], decimal_place)) + ")"
+        append_string = append_string + "(" + str(round(sensor_data[index][1][sensor_index], decimal_place)) + "," + str(round(sensor_data[index][2][sensor_index], decimal_place)) + "," + str(round(sensor_data[index][6][sensor_index], decimal_place)) + ")"
         if not(sensor_index == (len(sensor_data[index][1]) - 1)):
             append_string = append_string + ","
     append_string = append_string + "\n"
     test_data_output_string = test_data_output_string + append_string
     append_string = ""
 
-test_data_output_string = test_data_output_string + "end\n"
+#test_data_output_string = test_data_output_string + "end\n"
 print(test_data_output_string)
 
 # Write output string to file

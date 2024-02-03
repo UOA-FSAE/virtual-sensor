@@ -40,7 +40,7 @@ class Virtual_Cone_Detection(Node):
         timer_period = 0.1  # seconds
         self.timer = self.create_timer(timer_period, self.timer_callback)
         self.i = 0
-        with open('/home/dyu056/fsae/autonomous_2/autonomous/src/perception/virtual_sensor/TESTDATA.txt') as f: #Replace this with your absolute path to test data
+        with open('/home/dyu056/fsae/autonomous/autonomous/src/perception/virtual_sensor/TESTDATA.txt') as f:
         	self.stored_data_list = f.readlines()
         	self.total_length = len(self.stored_data_list)
         	#print(self.stored_data_list)
@@ -65,7 +65,7 @@ class Virtual_Cone_Detection(Node):
         x = float(list_of_messages[1]);
         y = float(list_of_messages[2]);
         theta = float(list_of_messages[3]);
-        cart = self.pack_cone_message(x,y,theta)
+        cart = self.pack_cone_message(x,y,theta,0)
         cones_list.append(cart);
 
         #Create cone object for recording cart position and rotation status
@@ -75,13 +75,14 @@ class Virtual_Cone_Detection(Node):
         #list_of_local_cones_y = [];
         
         for index in range(0,len(list_of_cone_messages),1):
-            if index % 2 == 0:
+            if index % 3 == 0:
                 if list_of_cone_messages[index] != "\n":
                     individual_x = float(list_of_cone_messages[index].strip()[1::1]);
-                    individual_y = float(list_of_cone_messages[index + 1].strip()[0:len(list_of_cone_messages[index + 1].strip()) - 1:1]);
+                    individual_y = float(list_of_cone_messages[index + 1].strip()[0:len(list_of_cone_messages[index + 2].strip()):1]);
+                    individual_color = float(list_of_cone_messages[index + 2].strip()[0:len(list_of_cone_messages[index + 2].strip()) - 1:1]);
                     #list_of_local_cones_x.append(float(individual_x));
                     #list_of_local_cones_y.append(float(individual_y));
-                    individual_cone = self.pack_cone_message(individual_x,individual_y,0.00)
+                    individual_cone = self.pack_cone_message(individual_x,individual_y,0.00, individual_color)
                     cones_list.append(individual_cone); #Add to cone messaage
 
         #list_of_cones = np.array([list_of_local_cones_x, list_of_local_cones_y])
@@ -91,7 +92,7 @@ class Virtual_Cone_Detection(Node):
         #return x, y, theta, list_of_cones;
         return output_message
 
-    def pack_cone_message(self,x,y,theta):
+    def pack_cone_message(self,x,y,theta, color):
         output_cone = Cone();
         position = Point();
         orientation = Quaternion();
@@ -104,6 +105,7 @@ class Virtual_Cone_Detection(Node):
         pose.orientation = orientation;
         pose_with_covariance.pose = pose;
         output_cone.pose = pose_with_covariance;
+        output_cone.colour = int(color);
         return output_cone
 
     def contaminate_message(self, data_input, noise_scale):
